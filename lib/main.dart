@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(
@@ -36,7 +37,7 @@ class _MainAppState extends State<MainApp> {
         title: const Text('Recetario kiwi'),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: agregarReceta,
+        onPressed: _irAFormulario,
         tooltip: 'Añadir una nueva receta',
         backgroundColor: Colors.green.shade500,
         child: const Icon(Icons.add, color: Colors.black,),
@@ -76,6 +77,22 @@ class _MainAppState extends State<MainApp> {
       ),
     );
   }
+
+  Future<void> _irAFormulario() async {
+    final nuevaReceta = await Navigator.push<Receta>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const PantallaNuevaReceta(),
+      ),
+    );
+
+     if (nuevaReceta != null) {
+      setState(() {
+        recetas.add(nuevaReceta);
+      });
+     }
+  }
+
 }
 
 class Receta {
@@ -235,6 +252,239 @@ class _TarjetaRecetaState extends State<TarjetaReceta> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+
+// PANTALLA FORMULARIO RECETA
+class PantallaNuevaReceta extends StatefulWidget {
+  const PantallaNuevaReceta({super.key});
+
+  @override
+  State<PantallaNuevaReceta> createState() => _PantallaNuevaEstado();
+}
+
+class _PantallaNuevaEstado extends State<PantallaNuevaReceta> {
+  final _formularioKey = GlobalKey<FormState>();
+
+  final _nombreController = TextEditingController();
+  final List<TextEditingController> _ingredientesControllers = [
+    TextEditingController(),
+  ];
+  final List<TextEditingController> _procesosControllers = [
+    TextEditingController(),
+  ];
+
+  final _duracionController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _duracionController.dispose();
+    for (final c in _ingredientesControllers) {
+      c.dispose();
+    }
+    for (final c in _procesosControllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _validarYGuardar() {
+  if (_formularioKey.currentState!.validate()) {
+    final ingredientes = _ingredientesControllers
+        .map((c) => c.text.trim())
+        .where((texto) => texto.isNotEmpty)
+        .toList();
+
+    final procesos = _procesosControllers
+        .map((c) => c.text.trim())
+        .where((texto) => texto.isNotEmpty)
+        .toList();
+
+    final duracion = int.tryParse(_duracionController.text.trim()) ?? 10;
+
+    final nuevaReceta = Receta(
+      titulo: _nombreController.text.trim(),
+      minutosPreparacion: duracion,
+      ingredientes: ingredientes,
+      procesos: procesos,
+      icono: Icons.event_available,
+      colorFondo: Colors.purple.shade100,
+    );
+
+    Navigator.pop(context, nuevaReceta);
+  }
+}
+  
+
+  Widget _construirSeccionDinamica({
+    required String titulo,
+    required String etiquetaCampo,
+    required List<TextEditingController> controladores,
+    required VoidCallback onAnadir,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          titulo,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        ...List.generate(controladores.length, (index) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: controladores[index],
+                    decoration: InputDecoration(
+                      labelText: '$etiquetaCampo ${index + 1}',
+                      border: const OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (index == 0 && (value == null || value.trim().isEmpty)) {
+                        return 'Añade al menos un ${etiquetaCampo.toLowerCase()}';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                if (controladores.length > 1) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        final eliminado = controladores.removeAt(index);
+                        eliminado.dispose();
+                      });
+                    },
+                    icon: const Icon(Icons.remove_circle_outline),
+                    tooltip: 'Eliminar',
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onAnadir,
+            icon: const Icon(Icons.add),
+            label: Text('Añadir ${etiquetaCampo.toLowerCase()}'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Insertar Receta')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.only(top: 20, left: 50, right: 50, bottom: 30),
+        child: Form(
+          key: _formularioKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Introduce a continuación los datos de la receta',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _nombreController,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'El nombre es obligatorio';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              _construirSeccionDinamica(
+                titulo: 'Ingredientes',
+                etiquetaCampo: 'Ingrediente',
+                controladores: _ingredientesControllers,
+                onAnadir: () {
+                  setState(() {
+                    _ingredientesControllers.add(TextEditingController());
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+              _construirSeccionDinamica(
+                titulo: 'Procesos',
+                etiquetaCampo: 'Paso',
+                controladores: _procesosControllers,
+                onAnadir: () {
+                  setState(() {
+                    _procesosControllers.add(TextEditingController());
+                  });
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+               // CAMPO DURACIÓN (Solo números, sin letras)
+              TextFormField(
+                controller: _duracionController,
+                keyboardType: TextInputType.number,
+                // Bloquea físicamente que se escriban letras en el teclado
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Duración (minutos)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.timer),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Introduce la duración en minutos';
+                  }
+                  // Doble validación lógica: intentamos convertir a entero
+                  final minutos = int.tryParse(value.trim());
+                  if (minutos == null) {
+                    return 'No se permiten letras, solo números';
+                  }
+                  if (minutos <= 0) {
+                    return 'La duración debe ser mayor a 0 minutos';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // BOTÓN VALIDAR Y GUARDAR
+              ElevatedButton.icon(
+                onPressed: _validarYGuardar,
+                icon: const Icon(Icons.save),
+                label: const Text('Validar y guardar'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // BOTÓN CANCELAR / VOLVER
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar y volver'),
+              )
+            ],
+          ),
         ),
       ),
     );
