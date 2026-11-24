@@ -3,9 +3,41 @@ import 'package:flutter/services.dart';
 
 void main() {
   runApp(
-    const MaterialApp(
-      debugShowCheckedModeBanner: true,
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
       home: MainApp(),
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.green,
+          primary: Colors.green.shade700,
+          secondary: Colors.green.shade500,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green.shade600,
+            foregroundColor: Colors.white,
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.green.shade800,
+            side: BorderSide(color: Colors.green.shade600),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.green.shade800,
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: Colors.green.shade700, width: 2),
+          ),
+          floatingLabelStyle: TextStyle(color: Colors.green.shade800),
+          prefixIconColor: Colors.green.shade700,
+        ),
+      ),
     ),
   );
 }
@@ -69,7 +101,14 @@ class _MainAppState extends State<MainApp> {
               padding: const EdgeInsets.symmetric(horizontal: 100.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: recetas.map((receta) => TarjetaReceta(receta: receta)).toList(),
+                children: List.generate(
+                  recetas.length,
+                  (index) => TarjetaReceta(
+                    receta: recetas[index],
+                    onEditar: () => _editarReceta(index),
+                    onEliminar: () => eliminarReceta(recetas[index]),
+                  ),
+                ),
               ),
             ),
           ),
@@ -91,6 +130,37 @@ class _MainAppState extends State<MainApp> {
         recetas.add(nuevaReceta);
       });
      }
+  }
+
+  void eliminarReceta(Receta receta) {
+    setState(() {
+     recetas.remove(receta);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Se ha eliminado correctamente la receta')),
+    );
+  }
+
+  Future<void> _editarReceta(int index) async {
+    final recetaActualizada = await Navigator.push<Receta>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PantallaNuevaReceta(
+          recetaInicial: recetas[index],
+        ),
+      ),
+    );
+
+    if (recetaActualizada != null) {
+      setState(() {
+        recetas[index] = recetaActualizada;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Receta actualizada correctamente')),
+        );
+      }
+    }
   }
 
 }
@@ -123,8 +193,15 @@ class Receta {
 
 class TarjetaReceta extends StatefulWidget {
   final Receta receta;
+  final VoidCallback? onEditar;
+  final VoidCallback? onEliminar;
 
-  const TarjetaReceta({super.key, required this.receta});
+  const TarjetaReceta({
+    super.key,
+    required this.receta,
+    this.onEditar,
+    this.onEliminar,
+  });
 
   @override
   State<TarjetaReceta> createState() => _TarjetaRecetaState();
@@ -248,6 +325,28 @@ class _TarjetaRecetaState extends State<TarjetaReceta> {
                       ),
                     ],
                   ),
+                  if (widget.onEditar != null || widget.onEliminar != null) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (widget.onEditar != null)
+                          OutlinedButton.icon(
+                            onPressed: widget.onEditar,
+                            icon: const Icon(Icons.edit_outlined),
+                            label: const Text('Editar'),
+                          ),
+                        if (widget.onEditar != null && widget.onEliminar != null)
+                          const SizedBox(width: 8),
+                        if (widget.onEliminar != null)
+                          ElevatedButton.icon(
+                            onPressed: widget.onEliminar,
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('Eliminar receta'),
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -259,10 +358,11 @@ class _TarjetaRecetaState extends State<TarjetaReceta> {
 }
 
 
-
 // PANTALLA FORMULARIO RECETA
 class PantallaNuevaReceta extends StatefulWidget {
-  const PantallaNuevaReceta({super.key});
+  final Receta? recetaInicial;
+
+  const PantallaNuevaReceta({super.key, this.recetaInicial});
 
   @override
   State<PantallaNuevaReceta> createState() => _PantallaNuevaEstado();
@@ -271,15 +371,29 @@ class PantallaNuevaReceta extends StatefulWidget {
 class _PantallaNuevaEstado extends State<PantallaNuevaReceta> {
   final _formularioKey = GlobalKey<FormState>();
 
-  final _nombreController = TextEditingController();
-  final List<TextEditingController> _ingredientesControllers = [
-    TextEditingController(),
-  ];
-  final List<TextEditingController> _procesosControllers = [
-    TextEditingController(),
-  ];
+  late final TextEditingController _nombreController;
+  late final TextEditingController _duracionController;
+  late final List<TextEditingController> _ingredientesControllers;
+  late final List<TextEditingController> _procesosControllers;
 
-  final _duracionController = TextEditingController();
+  @override
+  void initState() {
+    super.initState();
+    final receta = widget.recetaInicial;
+
+    _nombreController = TextEditingController(text: receta?.titulo ?? '');
+    _duracionController = TextEditingController(
+      text: receta != null ? receta.minutosPreparacion.toString() : '',
+    );
+
+    _ingredientesControllers = (receta != null && receta.ingredientes.isNotEmpty)
+        ? receta.ingredientes.map((ing) => TextEditingController(text: ing)).toList()
+        : [TextEditingController()];
+
+    _procesosControllers = (receta != null && receta.procesos.isNotEmpty)
+        ? receta.procesos.map((paso) => TextEditingController(text: paso)).toList()
+        : [TextEditingController()];
+  }
 
   @override
   void dispose() {
@@ -295,31 +409,31 @@ class _PantallaNuevaEstado extends State<PantallaNuevaReceta> {
   }
 
   void _validarYGuardar() {
-  if (_formularioKey.currentState!.validate()) {
-    final ingredientes = _ingredientesControllers
-        .map((c) => c.text.trim())
-        .where((texto) => texto.isNotEmpty)
-        .toList();
+    if (_formularioKey.currentState!.validate()) {
+      final ingredientes = _ingredientesControllers
+          .map((c) => c.text.trim())
+          .where((texto) => texto.isNotEmpty)
+          .toList();
 
-    final procesos = _procesosControllers
-        .map((c) => c.text.trim())
-        .where((texto) => texto.isNotEmpty)
-        .toList();
+      final procesos = _procesosControllers
+          .map((c) => c.text.trim())
+          .where((texto) => texto.isNotEmpty)
+          .toList();
 
-    final duracion = int.tryParse(_duracionController.text.trim()) ?? 10;
+      final duracion = int.tryParse(_duracionController.text.trim()) ?? 10;
 
-    final nuevaReceta = Receta(
-      titulo: _nombreController.text.trim(),
-      minutosPreparacion: duracion,
-      ingredientes: ingredientes,
-      procesos: procesos,
-      icono: Icons.event_available,
-      colorFondo: Colors.purple.shade100,
-    );
+      final recetaResultado = Receta(
+        titulo: _nombreController.text.trim(),
+        minutosPreparacion: duracion,
+        ingredientes: ingredientes,
+        procesos: procesos,
+        icono: widget.recetaInicial?.icono ?? Icons.event_available,
+        colorFondo: widget.recetaInicial?.colorFondo ?? Colors.purple.shade100,
+      );
 
-    Navigator.pop(context, nuevaReceta);
+      Navigator.pop(context, recetaResultado);
+    }
   }
-}
   
 
   Widget _construirSeccionDinamica({
@@ -388,7 +502,11 @@ class _PantallaNuevaEstado extends State<PantallaNuevaReceta> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Insertar Receta')),
+      appBar: AppBar(
+        title: Text(
+          widget.recetaInicial == null ? 'Insertar Receta' : 'Editar Receta',
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.only(top: 20, left: 50, right: 50, bottom: 30),
         child: Form(
