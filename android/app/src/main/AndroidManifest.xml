@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
-        android:label="kiwi_recetario"
+        android:label="Recetario Kiwi"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
